@@ -1,12 +1,10 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
 from pydantic import BaseModel
+from sqlmodel import Field, SQLModel
 
-class History(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    type: str
-    input: str
-    output: str
+class AudioRequest(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    text: str
+    file_path: str
 
-class AudioRequest(BaseModel):
+class TextToSpeechRequest(BaseModel):
     text: str
