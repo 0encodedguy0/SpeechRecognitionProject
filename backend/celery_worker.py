@@ -1,13 +1,15 @@
 from celery import Celery
 
-# Конфигурация
+# Указываем настройки брокера для Celery
 celery_app = Celery(
-    "tasks",
-    brocker="redis://localhost:6379/0",  # Redis как брокер задач
-    backend="redis://localhost:6379/1",  # Redis как хранилище результатов
+"tasks",
+broker="redis://localhost:6379/0", # Адрес вашего Redis сервера
+backend="redis://localhost:6379/0" # Адрес для сохранения результата задач
 )
 
-celery_app.conf.task_routes = {
-    "tasks.speech_to_text": {"queue": "speech"},
-    "tasks.text_to_speech": {"queue": "speech"},
-}
+# Импортируем задачи, чтобы Celery знал, какие задачи обрабатывать
+from backend.services.tasks import async_speech_to_text, async_text_to_speech
+
+# Запуск воркера:
+# Чтобы запустить воркер, используйте команду:
+# celery -A celery_worker.celery_app worker —loglevel=info
