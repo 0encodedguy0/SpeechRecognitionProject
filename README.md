@@ -1,4 +1,4 @@
-# Speech Processing Project
+# Speech Recognition Project
 
 Это проект для обработки речи с использованием **FastAPI** для бэкенда, **Celery** для асинхронной обработки задач, **Redis** в качестве брокера сообщений и **React** для фронтенда.
 
