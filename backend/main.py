@@ -1,57 +1,40 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from services.tasks import speech_to_text_task, text_to_speech_task
-from celery.result import AsyncResult
-from database import init_db, get_session
-from models import AudioRequest, History
-import logging
+from fastapi import FastAPI, UploadFile, HTTPException, BackgroundTasks
+from backend.services.speech_to_text import process_audio_to_text
+from backend.services.text_to_speech import generate_audio_from_text
+from backend.services.tasks import async_speech_to_text, async_text_to_speech
 
-# Настройка логов
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("logs/app.log"), logging.StreamHandler()],
-)
-logger = logging.getLogger(__name__)
-
-app = FastAPI()
-
-# CORS для взаимодействия с фронтендом
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup_event():
-    await init_db()
+app = FastAPI(title="Speech Processing API", version="1.0.0")
 
 @app.post("/speech-to-text/")
-async def speech_to_text(file: UploadFile = File(...)):
-    temp_file_path = f"temp_{file.filename}"
-    with open(temp_file_path, "wb") as f:
-        f.write(await file.read())
-
-    task = speech_to_text_task.delay(temp_file_path)
-    logger.info(f"Speech-to-text task started with task_id {task.id}")
-    return {"task_id": task.id}
+async def speech_to_text(file: UploadFile):
+    if file.content_type != "audio/wav":
+        raise HTTPException(status_code=400, detail="Только файлы WAV поддерживаются.")
+    file_location = f"temp/{file.filename}"
+    with open(file_location, "wb") as buffer:
+        buffer.write(await file.read())
+    try:
+        result = process_audio_to_text(file_location)
+        return {"text": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/text-to-speech/")
-async def text_to_speech(request: AudioRequest):
-    task = text_to_speech_task.delay(request.text)
-    logger.info(f"Text-to-speech task started with task_id {task.id}")
-    return {"task_id": task.id}
+async def text_to_speech(background_tasks: BackgroundTasks, text: str):
+    file_location = f"temp/output.wav"
+    background_tasks.add_task(generate_audio_from_text, text, file_location)
+    return {"message": "Аудиофайл будет готов через несколько секунд", "path": file_location}
 
-@app.get("/task-status/{task_id}/")
-async def get_task_status(task_id: str):
-    task_result = AsyncResult(task_id)
-    if task_result.state == "PENDING":
-        return {"status": "Processing"}
-    elif task_result.state == "SUCCESS":
-        return {"status": "Completed", "result": task_result.result}
-    elif task_result.state == "FAILURE":
-        return {"status": "Failed"}
-    return {"status": task_result.state}
+@app.post("/tasks/speech-to-text/")
+async def tasks_speech_to_text(file: UploadFile):
+    if file.content_type != "audio/wav":
+        raise HTTPException(status_code=400, detail="Только файлы WAV поддерживаются.")
+    file_location = f"temp/{file.filename}"
+    with open(file_location, "wb") as buffer:
+        buffer.write(await file.read())
+    task_id = async_speech_to_text.delay(file_location)
+    return {"task_id": task_id.id, "status": "В процессе"}
+
+@app.post("/tasks/text-to-speech/")
+async def tasks_text_to_speech(text: str):
+    task_id = async_text_to_speech.delay(text)
+    return {"task_id": task_id.id, "status": "В процессе"}

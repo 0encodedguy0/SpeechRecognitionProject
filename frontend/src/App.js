@@ -68,9 +68,9 @@ function App() {
             {audioUrl && (
                 <audio className="mt-5" controls>
                     <source src={`http://localhost:8000/${audioUrl}`} type="audio/mpeg" />
-    </audio>
-    )}
-    </div>
+                </audio>
+            )}
+        </div>
     );
 }
 
